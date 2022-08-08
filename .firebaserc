@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "fir-rtc-89b99"
-  }
+    "default": "fir-rtc-89b99",
+    "firRTC": "fir-rtc-44604"
+  },
+  "targets": {},
+  "etags": {}
 }
