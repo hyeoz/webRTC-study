@@ -64,11 +64,9 @@ async function createRoom() {
       await peerConnection.setRemoteDescription(answer); // 수신자의 응답을 remote description 으로 지정
     }
   });
-  // ~0808
-
   // Code for creating room above
 
-  localStream.getTracks().forEach((track) => {
+  localStream?.getTracks().forEach((track) => {
     peerConnection.addTrack(track, localStream);
   });
 
@@ -82,7 +80,7 @@ async function createRoom() {
 
   peerConnection.addEventListener("track", (event) => {
     console.log("Got remote track:", event.streams[0]);
-    event.streams[0].getTracks().forEach((track) => {
+    event.streams[0]?.getTracks().forEach((track) => {
       console.log("Add a track to the remoteStream:", track);
       remoteStream.addTrack(track);
     });
@@ -113,6 +111,20 @@ function joinRoom() {
     },
     { once: true }
   );
+
+  const offer = roomSnapshot.data().offer;
+  await peerConnection.setRemoteDescription(offer);
+  const answer = await peerConnection.createAnswer();
+  await peerConnection.setLocalDescription(answer);
+  
+  const roomWithAnswer = {
+      answer: {
+          type: answer.type,
+          sdp: answer.sdp
+      }
+  }
+  await roomRef.update(roomWithAnswer);
+
   roomDialog.open();
 }
 
@@ -126,7 +138,7 @@ async function joinRoomById(roomId) {
     console.log("Create PeerConnection with configuration: ", configuration);
     peerConnection = new RTCPeerConnection(configuration);
     registerPeerConnectionListeners();
-    localStream.getTracks().forEach((track) => {
+    localStream?.getTracks().forEach((track) => {
       peerConnection.addTrack(track, localStream);
     });
 
@@ -136,7 +148,7 @@ async function joinRoomById(roomId) {
 
     peerConnection.addEventListener("track", (event) => {
       console.log("Got remote track:", event.streams[0]);
-      event.streams[0].getTracks().forEach((track) => {
+      event.streams[0]?.getTracks().forEach((track) => {
         console.log("Add a track to the remoteStream:", track);
         remoteStream.addTrack(track);
       });
@@ -170,13 +182,13 @@ async function openUserMedia(e) {
 }
 
 async function hangUp(e) {
-  const tracks = document.querySelector("#localVideo").srcObject.getTracks();
+  const tracks = document.querySelector("#localVideo").srcObject?.getTracks();
   tracks.forEach((track) => {
     track.stop();
   });
 
   if (remoteStream) {
-    remoteStream.getTracks().forEach((track) => track.stop());
+    remoteStream?.getTracks().forEach((track) => track.stop());
   }
 
   if (peerConnection) {
@@ -207,6 +219,31 @@ async function hangUp(e) {
   }
 
   document.location.reload(true);
+}
+
+async function collectIceCandidates(
+  roomRef,
+  peerConnection,
+  localName,
+  remoteName
+) {
+  const candidatesCollection = roomRef.collection(localName);
+
+  peerConnection.addEventListener("icecandidate", (event) => {
+    if (event.candidate) {
+      const json = event.candidate.toJSON();
+      candidatesCollection.add(json);
+    }
+  });
+
+  roomRef.collection(remoteName).onSnapshot((snapshot) => {
+    snapshot.docChanges().forEach((change) => {
+      if (change.type === "added") {
+        const candidate = new RTCIceCandidate(change.doc.data());
+        peerConneciton.addIceCandidate(candidate);
+      }
+    });
+  });
 }
 
 function registerPeerConnectionListeners() {
