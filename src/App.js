@@ -10,11 +10,12 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { firestore } from "./firebase";
 import "./global.css";
 
 function App() {
+  /*
   // google free ice server
   const servers = {
     iceServers: [
@@ -85,7 +86,7 @@ function App() {
 
     peerConnection.addEventListener("icecandidate", async (event) => {
       // peerConnection 에 있는 ICE candidates 을 firestore 에 저장함
-      /* ICECandidate: webRTC API 의 한 종류로, peer connection 을 구축 할 때 사용되기도 하는 ICE 의 후보군을 의미. 원격 장치와 통신을 하기 위해 요구되는 프로토콜과 아루팅에 대해 알려줌. */
+      // ICECandidate: webRTC API 의 한 종류로, peer connection 을 구축 할 때 사용되기도 하는 ICE 의 후보군을 의미. 원격 장치와 통신을 하기 위해 요구되는 프로토콜과 아루팅에 대해 알려줌.
       event.candidate &&
         (await addDoc(offerCandidates, event.candidate.toJSON()));
     });
@@ -195,38 +196,118 @@ function App() {
 
   return (
     <>
-      {/* <h2>1. Start your Webcam</h2>
-      <div className="videos">
-        <span>
-          <h3>Local Stream</h3>
-          <video id="webcamVideo" autoPlay playsInline></video>
-        </span>
-        <span>
-          <h3>Remote Stream</h3>
-          <video id="remoteVideo" autoPlay playsInline></video>
-        </span>
-      </div>
-
-      <button id="webcamButton">Start webcam</button>
-      <h2>2. Create a new Call</h2>
-      <button id="callButton" disabled>
-        Create Call (offer)
-      </button>
-
-      <h2>3. Join a Call</h2>
-      <p>Answer the call from a different browser window or device</p>
-
-      <input id="callInput" />
-      <button id="answerButton" disabled>
-        Answer
-      </button>
-
-      <h2>4. Hangup</h2>
-
-      <button id="hangupButton" disabled>
-        Hangup
-      </button> */}
+      
     </>
+  );  */
+
+  // https://www.youtube.com/watch?v=5M3Jzs2NFSA 강의
+  const localRef = useRef();
+  const remoteRef = useRef();
+  const pc = useRef(new RTCPeerConnection(null));
+  const textRef = useRef();
+
+  const getUserMedia = async () => {
+    const constraints = {
+      audio: false,
+      video: true,
+    };
+    const userMedia = await navigator.mediaDevices.getUserMedia(constraints);
+    const _pc = new RTCPeerConnection(null);
+    // const _pc = new RTCPeerConnection(null);
+
+    localRef.current.srcObject = userMedia;
+
+    userMedia.getTracks().forEach((track) => {
+      console.log("add track");
+      _pc.addTrack(track, userMedia);
+    });
+
+    _pc.onicecandidate = (e) => {
+      // setLocalDescription 이 작동하면 트리거됨
+      if (e.candidate) console.log(e.candidate, "e onicecandidate");
+      // console.log(JSON.stringify(e.candidate), "e.candidate");
+    };
+    _pc.oniceconnectionstatechange = (e) => {
+      console.log(e, "ice connection state changes"); // connected, disconnected, failed, closed
+    };
+    _pc.ontrack = (e) => {
+      console.log(e, "on track");
+      //we got remote stream...
+      remoteRef.current.srcObject = e.streams[0];
+    };
+
+    // _pc.addEventListener("icecandidate", (e) => {
+    //   // if (e.candidate)
+    //   console.log(e, "e onicecandidate");
+    //   console.log(JSON.stringify(e.candidate), "e.candidate");
+    // });
+    // _pc.addEventListener("iceconnectionstatechange", (e) => {
+    //   console.log(e, "ice connection state changes"); // connected, disconnected, failed, closed
+    // });
+    // _pc.addEventListener("track", (e) => {
+    //   //we got remote stream...
+    //   remoteRef.current.srcObject = e.streams[0];
+    // });
+
+    pc.current = _pc;
+  };
+
+  const createOffer = async () => {
+    try {
+      const sdp = await pc.current.createOffer({
+        offerToReceiveAudio: 1,
+        offerToReceiveVideo: 1,
+      });
+      console.log(sdp, "===> sdp of offer description");
+      pc.current.setLocalDescription(sdp);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+  const createAnswer = async () => {
+    try {
+      const sdp = await pc.current.createAnswer({
+        offerToReceiveAudio: 1,
+        offerToReceiveVideo: 1,
+      });
+      console.log(sdp, "===> sdp of answer description");
+      pc.current.setLocalDescription(sdp); // TODO: 영상과 달라진 부분!!
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const setRemoteDescription = () => {
+    const sdp = JSON.parse(textRef.current.value);
+    console.log(sdp, "---> remote description");
+
+    pc.current.setRemoteDescription(sdp);
+  };
+  const addCandidate = async () => {
+    const candidate = JSON.parse(textRef.current.value);
+
+    // pc.current.addIceCandidate(candidate);
+    await pc.current.addIceCandidate(candidate); // TODO: 영상과 다른 점...candidate 첫번째꺼 쓰기...
+    console.log("Adding Candidate ...", candidate);
+  };
+  useEffect(() => {
+    getUserMedia();
+  }, []);
+
+  return (
+    <div>
+      {/* <button onClick={getUserMedia}>Get Access to Media</button> */}
+      <br />
+      <video ref={localRef} autoPlay />
+      <video ref={remoteRef} autoPlay />
+      <br />
+      <textarea ref={textRef} />
+      <br />
+      <button onClick={createOffer}>Create Offer</button>
+      <button onClick={createAnswer}>Create Answer</button>
+      <button onClick={setRemoteDescription}>Set Remote Description</button>
+      <button onClick={addCandidate}>Add Candidates</button>
+    </div>
   );
 }
 
